@@ -18,7 +18,7 @@ byte previousState = HIGH;         // what state was the button last time
 unsigned int count = 0;            // how many times has it changed to low
 unsigned long countAt = 0;         // when count changed
 unsigned int countPrinted = 0;     // last count printed
-
+unsigned int preHeattime = 100000;
 
 //Global sensor objects
 CCS811 myCCS811(CCS811_ADDR);
@@ -55,9 +55,12 @@ unsigned long measTime = 0;
 int ledPin = 13;
 signed int temperatureCorrected;
 int value;
+
+
 unsigned long measCount = 0;
 int displayFactor = 1000/48;
-unsigned long thresholdPPM = 500;
+unsigned long thresholdPPM = 450;
+unsigned long upperPPM = 450;
 
  void setup() {
   Serial.begin(9600); 
@@ -71,15 +74,10 @@ unsigned long thresholdPPM = 500;
   printDriverError( returnCode );
   Serial.println();
   
-  //For I2C, enable the following and disable the SPI section
-  myBME280.settings.commInterface = I2C_MODE;
-  myBME280.settings.I2CAddress = 0x77;
-
   //Initialize BME280
   //For I2C, enable the following and disable the SPI section
-  //myBME280.settings.commInterface = I2C_MODE;
-  //myBME280.settings.I2CAddress = 0x76;
-  
+  myBME280.settings.commInterface = I2C_MODE;
+  myBME280.settings.I2CAddress = 0x76;
   myBME280.settings.runMode = 3; //Normal mode
   myBME280.settings.tStandby = 0;
   myBME280.settings.filter = 4;
@@ -96,16 +94,19 @@ unsigned long thresholdPPM = 500;
   display.clearDisplay();
   display.setTextSize(2);
   display.setTextColor(WHITE);
-  display.setCursor(0,25);
-  display.println("AirQuality");
+  display.setTextSize(2);
+  display.setCursor(0,0);
+  display.println("CO2Chamber");
   display.setTextSize(1);
+  display.setCursor(0,22);
+  display.println("Soil Respiration");
+  display.setTextSize(1);
+  display.setCursor(0,36);
+  display.println("MH-Z16 CO2 NDIR");
   display.setCursor(0,46);
   display.println("BME280 Temp/Hum");
   display.setCursor(0,56);
-  display.println("CCS811 CO2 Sensor");
-  display.setTextSize(2);
-  display.setCursor(0,0);
-  display.println("ABC");
+  display.println("CCS811 eCO2 Sensor");
   display.display();
 
   delay(1000);
@@ -131,7 +132,7 @@ unsigned long thresholdPPM = 500;
   unsigned int mhzRespULow = (unsigned int) response[7];
   unsigned int responseV9 = (unsigned int) response[7];
 
-  Serial.println("Booting MH-Z19");
+  Serial.println("pre-heating MH-Z19");
   
 while (count == 0){
   //OLEDshowGraph();
@@ -186,7 +187,23 @@ while (count == 0){
   preHeating();
 }
 
+myBME280.setReferencePressure(96500); //Adjust the sea level pressure used for altitude calculations
+
+
 Serial.println("disable ABC");
+Serial.println("read environmental parameters");
+Serial.print("Altitude: ");
+Serial.print(myBME280.readFloatAltitudeMeters(), 0);
+Serial.println(" m");
+Serial.print("Temperature: ");
+Serial.print(myBME280.readTempC(), 0);
+Serial.println(" °C");
+Serial.print("Humidity: ");
+Serial.print(myBME280.readFloatHumidity(), 1);
+Serial.println(" %hum");
+Serial.print("Pressure: ");
+Serial.print(myBME280.readFloatPressure()/100, 0);
+Serial.println(" hPa");
 
 mySerial.write(setABC,9);
   delay(200);
@@ -217,6 +234,7 @@ mySerial.write(setABC,9);
   p2 = tpwm/251; // start and end pulse width combined
 
 OLEDdrawBackground();
+  Serial.println("Start measuring");
 }
 
 void loop() {
@@ -248,11 +266,11 @@ void loop() {
     ppmCCS881 = myCCS811.getCO2();
     tvoc = myCCS811.getTVOC();
     BMEtempC = myBME280.readTempC();
-    //BMEpressure = myBME280.readFloatPressure();
-    BMEhumid = myBME280.readFloatPressure();
+    BMEpressure = myBME280.readFloatPressure();
+    BMEhumid = myBME280.readFloatHumidity();
 
     //This sends the temperature data to the CCS811
-    //myCCS811.setEnvironmentalData(BMEhumid, BMEtempC);
+    myCCS811.setEnvironmentalData(BMEhumid, BMEtempC);
   }
   else if (myCCS811.checkForStatusError())
   {
@@ -267,13 +285,17 @@ void loop() {
   
   Serial.print(measTime);
   Serial.print(" ");
+  Serial.print(ppmMHZ19);
+  Serial.print(" ");
   Serial.print(temperatureCorrected);
   Serial.print(" ");
   Serial.print(BMEtempC);
   Serial.print(" ");
-  Serial.print(ppmCCS881);
+  Serial.print(BMEhumid);
   Serial.print(" ");
-  Serial.println(ppmMHZ19);
+  Serial.print(BMEpressure/100, 1);
+  Serial.print(" ");
+  Serial.println(ppmCCS881);
   
   digitalWrite(ledPin, LOW);
   delay(2000);
@@ -304,6 +326,16 @@ void OLEDshowGraph()
         display.setCursor(100,9);
         display.print(measTime);
         display.println("s");
+
+        display.setTextSize(1);
+        display.fillRect(1, 46, 80, 17, BLACK);
+        display.setCursor(2,47);
+        display.print(ppmCCS881);
+        display.println(" ppm eCO2");
+        display.setCursor(2,55);
+        display.print(tvoc);
+        display.println(" ppb tvoc");
+        
         display.drawLine(measCount-1, 64-(oldppmMHZ19/displayFactor),measCount, 64-(ppmMHZ19/displayFactor),WHITE);
 
         if ( ppmMHZ19 > thresholdPPM){
@@ -335,11 +367,9 @@ for (int i=0; i <= 128; i=i+7){
 
   display.setTextSize(1);
   display.setTextColor(WHITE);
-  display.setCursor(100,29);
-  display.println("3000");
-  display.setCursor(100,44);
+  display.setCursor(102,19);
   display.println("1000");
-  display.setCursor(105,54);
+  display.setCursor(108, 46);
   display.println("400");
   
   display.display();
@@ -417,7 +447,7 @@ void printSensorError()
 // PreHeating display screen and wait for button
 void preHeating()
 {
-  if (millis() >150000) {
+  if (millis() > preHeattime) {
     count = count + 1;
   }
   if (pushbutton.update()) {
