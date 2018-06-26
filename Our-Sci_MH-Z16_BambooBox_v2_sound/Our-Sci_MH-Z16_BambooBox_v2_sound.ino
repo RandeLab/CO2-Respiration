@@ -2,6 +2,8 @@
 #include <SparkFunBME280.h>
 #include <SparkFunCCS811.h>
 #include <Wire.h>
+#include <Audio.h>
+#include "AudioSampleRooster2.h"       // http://www.freesound.org/people/zgump/sounds/86334/
 
 #define OLED_RESET 4
 
@@ -69,6 +71,14 @@ unsigned long started = millis();
 
 IntervalTimer measurementTimer;
 
+
+//testing sound
+AudioPlayMemory    sound0;
+AudioMixer4        mix1;    // two 4-channel mixers are needed in
+AudioOutputAnalog  dac;     // play to both I2S audio board and on-chip DAC
+AudioConnection    c1(sound0, 0, mix1, 0);
+AudioConnection    c10(mix1, 0, dac, 0);
+
 void setup()
 {
 
@@ -95,12 +105,18 @@ void setup()
     showLogo_hackteria();
     delay(1000);
     //preHeating();
+
+//testing sound
+    AudioMemory(10);
+    mix1.gain(0, 1);
+    sound0.play(AudioSampleRooster2);
+
+//Start with empty display
     OLEDdrawBackground();
 }
 
 void loop()
 {
-
     char c = 0;
     while (Serial.available()) {
         c = Serial.read();
@@ -126,6 +142,7 @@ void loop()
         started_idx = HIGH_RES_COUNT - 1;
         started = millis();
         meas_counter = 0;
+        sound0.play(AudioSampleRooster2);
         OLEDdrawBackground();
     }
 
@@ -133,6 +150,7 @@ void loop()
         showLogo();
         Serial1.write(CAL, sizeof(CAL));
         delay(20);
+        
         calDisplay();
         OLEDdrawBackground();
     }
