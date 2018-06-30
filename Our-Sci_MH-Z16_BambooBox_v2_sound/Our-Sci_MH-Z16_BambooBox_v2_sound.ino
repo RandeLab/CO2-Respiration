@@ -105,7 +105,7 @@ void setup()
     digitalWrite (ledPin1, LOW);
     showLogo_humus_text();
     delay(3000);
-    showLogo();
+    showLogo_oursci();
     delay(1600);
     showLogo_hackteria();
     delay(1600);
@@ -148,7 +148,7 @@ void loop()
         started = millis();
         meas_counter = 0;
         buttonPressed = 1;
-        showLogo();
+        showLogo_oursci();
         delay(300);
         sound0.play(AudioSampleRooster2);
         OLEDdrawBackground();
@@ -492,7 +492,7 @@ int16_t measureSensors(struct Measurement* current)
 
 */ 
 
-// 'our-sci_logo', 128x64px
+// 'our-sci_logo', 128x64px  made with http://javl.github.io/image2cpp/
 const unsigned char oursci_logo [] PROGMEM = {
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
@@ -766,7 +766,7 @@ const unsigned char humus_logo_plant [] PROGMEM = {
 
 
 
-void showLogo(){
+void showLogo_oursci(){
   display.clearDisplay(); // Make sure the display is cleared
   display.drawBitmap(0, 0, oursci_logo, 128, 64, WHITE);  
   display.setTextSize(2);
