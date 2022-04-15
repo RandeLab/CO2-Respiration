@@ -31,13 +31,19 @@
 
  /*
  * dusjagr edited some stuffs...
+ * Adding display
  * Adding timer
+ * Not finished: add buttons, and external Temp-probe
+ * Not finished: proper calibration routine
  * 
  */
 
 #include <Arduino.h>
 #include <SensirionI2CScd4x.h>
 #include <Wire.h>
+
+uint16_t alt = 113;
+float tempOffset = 4.5;
 
 
 // OLED stuffs **********************
@@ -116,11 +122,76 @@ void setup() {
         Serial.print("Error trying to execute getSerialNumber(): ");
         errorToString(error, errorMessage, 256);
         Serial.println(errorMessage);
-    } else {
+    } else {                                                                                                           
         printSerialNumber(serial0, serial1, serial2);
     }
 
-    // Start Measurement
+// Some settings **************************************
+    
+    scd4x.setSensorAltitude(alt);
+    scd4x.setTemperatureOffset(tempOffset);
+    scd4x.setAutomaticSelfCalibration(false);
+    Serial.println("AutoSelfCalibrations is off");
+
+    uint16_t setAlt;
+    error = scd4x.getSensorAltitude(setAlt);
+    if (error) {
+        Serial.print("Error trying: ");
+        errorToString(error, errorMessage, 256);
+        Serial.println(errorMessage);
+    } else {
+        Serial.print("Altitude is set to: ");
+        Serial.println(setAlt);
+    }
+
+    float settempOffset;
+    error = scd4x.getTemperatureOffset(settempOffset);
+    if (error) {
+        Serial.print("Error trying: ");
+        errorToString(error, errorMessage, 256);
+        Serial.println(errorMessage);
+    } else {
+        Serial.print("Temperature Offset set to: ");
+        Serial.println(settempOffset);
+    }
+
+// Force Calibration **************************************
+
+   /**
+     * performForcedRecalibration() - To successfully conduct an accurate forced
+    recalibration, the following steps need to be carried out:
+    1. Operate the SCD4x in a periodic measurement mode for > 3 minutes in an
+    environment with homogenous and constant CO₂ concentration.
+    2. Stop periodic measurement. Wait 500 ms.
+    3. Subsequently issue the perform_forced_recalibration command and
+    optionally read out the baseline correction. A return value of 0xffff
+    indicates that the forced recalibration failed.
+     *
+     * @param targetCo2Concentration Target CO₂ concentration in ppm.
+     *
+     * @param frcCorrection FRC correction value in CO₂ ppm or 0xFFFF if the
+    command failed. Convert value to CO₂ ppm with: value - 0x8000
+     *
+     * @return 0 on success, an error code otherwise
+     */
+
+/*
+    uint16_t calPPM = 500;
+    uint16_t frc;
+    error = scd4x.performForcedRecalibration(calPPM, frc);
+    if (error) {
+        Serial.print("Error trying: ");
+        errorToString(error, errorMessage, 256);
+        Serial.println(errorMessage);
+    } else {
+        Serial.print("Changed calibration by: ");
+        Serial.println(frc-0x8000);
+    }
+    delay(400);
+*/ 
+
+// Start Measurement **************************************
+
     error = scd4x.startPeriodicMeasurement();
     if (error) {
         Serial.print("Error trying to execute startPeriodicMeasurement(): ");
