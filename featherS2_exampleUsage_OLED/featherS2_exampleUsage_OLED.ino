@@ -46,17 +46,24 @@ uint16_t alt = 113;
 float tempOffset = 4.5;
 
 
-// OLED stuffs **********************
+// Variables will change:
+const int LEDonBoard = 13;      // the number of the LED pin
+int ledState = LOW;             // ledState used to set the LED
 
+
+// OLED stuffs **********************
+#include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
 #define OLED_RESET 4
+#define SCREEN_ADDRESS 0x3C
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 uint32_t displayLimit = 1400;
 uint32_t displayFactor = displayLimit / 48;
 uint32_t meas_counter = 0;
 int32_t thresholdPPM = 450;
+
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // """"""""""""""""""""""""""""""""""
@@ -66,6 +73,11 @@ SensirionI2CScd4x scd4x;
 unsigned long getDataTimer = 0;
 unsigned long TimeSec = 0;
 unsigned long timeElapse = 0;//used to wait the sensor to stabilize before calibration
+uint16_t error;
+char errorMessage[256];
+uint16_t co2;
+float temperature;
+float humidity;
 
 void printUint16Hex(uint16_t value) {
     Serial.print(value < 4096 ? "0" : "");
@@ -85,24 +97,28 @@ void printSerialNumber(uint16_t serial0, uint16_t serial1, uint16_t serial2) {
 void setup() {
 
     Serial.begin(115200);
+    /*
     while (!Serial) {
-        delay(100);
+        delay(500);
     }
-    
+    */
+        
+    delay(500);
     initDisplay();
+    delay(100);
+
+    pinMode(LEDonBoard, OUTPUT);
+    digitalWrite(LEDonBoard, HIGH);
 
     showLogo_humus_text();
-    delay(1000);
+    delay(500);
     showLogo_oursci();
-    delay(1000);
+    delay(500);
     showLogo_hackteria();
-    delay(1000);
+    delay(500);
     OLEDdrawBackground();
     
     Wire.begin();
-
-    uint16_t error;
-    char errorMessage[256];
 
     scd4x.begin(Wire);
 
@@ -131,7 +147,19 @@ void setup() {
     scd4x.setSensorAltitude(alt);
     scd4x.setTemperatureOffset(tempOffset);
     scd4x.setAutomaticSelfCalibration(false);
-    Serial.println("AutoSelfCalibrations is off");
+    
+    uint16_t ascEnabled;
+    error = scd4x.getAutomaticSelfCalibration(ascEnabled);
+    if (error) {
+        Serial.print("Error trying: ");
+        errorToString(error, errorMessage, 256);
+        Serial.println(errorMessage);
+    } else {
+        Serial.print("AutoSelfCalibrations is: ");
+        if (ascEnabled) Serial.println("ON");
+        if (!ascEnabled) Serial.println("OFF");
+    }
+    
 
     uint16_t setAlt;
     error = scd4x.getSensorAltitude(setAlt);
@@ -174,9 +202,9 @@ void setup() {
      *
      * @return 0 on success, an error code otherwise
      */
-
+    
 /*
-    uint16_t calPPM = 500;
+    uint16_t calPPM = 550;
     uint16_t frc;
     error = scd4x.performForcedRecalibration(calPPM, frc);
     if (error) {
@@ -188,7 +216,8 @@ void setup() {
         Serial.println(frc-0x8000);
     }
     delay(400);
-*/ 
+
+*/
 
 // Start Measurement **************************************
 
@@ -204,15 +233,12 @@ void setup() {
 }
 
 void loop() {
-    uint16_t error;
-    char errorMessage[256];
 
     if (millis() - getDataTimer >= 5000){
+    digitalWrite(LEDonBoard, HIGH);
 
     // Read Measurement
-    uint16_t co2;
-    float temperature;
-    float humidity;
+
     error = scd4x.readMeasurement(co2, temperature, humidity);
     if (error) {
         Serial.print("Error trying to execute readMeasurement(): ");
@@ -238,6 +264,8 @@ void loop() {
 
 
     OLEDshowCO2(co2, temperature, humidity);
+
+    digitalWrite(LEDonBoard, LOW);
     meas_counter++;
     }
     
@@ -519,9 +547,15 @@ const unsigned char humus_logo_plant [] PROGMEM = {
 // OLED stuffs **********************
 
 void initDisplay()
-{
+{  /* SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+    if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;); // Don't proceed, loop forever
+     } 
+     */
     display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
     display.clearDisplay();
+    /*
     display.setTextSize(2);
     display.setTextColor(WHITE);
     display.setCursor(0, 25);
@@ -534,6 +568,7 @@ void initDisplay()
     display.setTextSize(2);
     display.setCursor(0, 0);
     display.println("ABC");
+    */
     display.display();
 }
 
@@ -651,7 +686,7 @@ void OLEDshowCO2(uint16_t ppm, float temp, float hum)
         display.drawLine(meas_counter - 1 + 28, 64 - last_ppm_high_res() / displayFactor, meas_counter + 28, 64 - current->ppm / displayFactor, WHITE);
     }
 */
-    if (meas_counter > 0) {
+    if (meas_counter >= 0) {
         display.drawLine(meas_counter - 0 + 28, 64 - 400 / displayFactor, meas_counter + 28, 64 - ppm / displayFactor, WHITE);
     }
 
