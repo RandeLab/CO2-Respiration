@@ -45,30 +45,35 @@
 #include <SensirionI2CScd4x.h>
 #include <Wire.h>
 
+const int LEDonBoard = 13;      // the number of the LED pin
+const int LEDexternal = 33;      // the number of the LED pin
+int ledState = LOW;             // ledState used to set the LED
+
+// SCD41 calibration settings *******
+// ==================================
+
 uint16_t alt = 115;
 uint32_t pressureCalibration;
 float tempOffset = 3.5;
-
-// Variables will change:
-const int LEDonBoard = 13;      // the number of the LED pin
-int ledState = LOW;             // ledState used to set the LED
+bool ascSetting = false; // Turn automatic self calibration off
 
 // BMP280 stuffs ********************
+// ==================================
 
 #ifdef BMP_IS_ATTACHED
+  #include <Adafruit_BMP280.h>
+  Adafruit_BMP280 bmp; // I2C
 
-#include <Adafruit_BMP280.h>
-Adafruit_BMP280 bmp; // I2C
+  #define SEA_LEVEL_PRESSURE    1010.0f   // sea level pressure 1013.25
 
-#define SEA_LEVEL_PRESSURE    1007.0f   // sea level pressure 1013.25
-
-float BMP280temp;
-uint32_t BMP280pres;
-float BMP280alti;
-
+  float BMP280temp;
+  uint32_t BMP280pres;
+  float BMP280alti;
 #endif
 
 // OLED stuffs **********************
+// ==================================
+
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
@@ -118,6 +123,8 @@ void setup() {
 
     pinMode(LEDonBoard, OUTPUT);
     digitalWrite(LEDonBoard, HIGH);
+    pinMode(LEDexternal, OUTPUT);
+    digitalWrite(LEDexternal, HIGH);
 
     Serial.println("    ");
     Serial.println("=========== Initializing OLED Screen ===========");
@@ -138,10 +145,10 @@ void setup() {
 #endif
 
 #ifdef BMP_IS_ATTACHED
-    
     unsigned status;
     Serial.println("BMP280: begin");
     status = bmp.begin(0x76, BMP280_CHIPID);
+    
     OLEDtestBMP280();
     delay(500);
     if (!status) {
@@ -152,27 +159,25 @@ void setup() {
       Serial.print("   ID of 0x56-0x58 represents a BMP 280,\n");
       Serial.print("        ID of 0x60 represents a BME 280.\n");
       Serial.print("        ID of 0x61 represents a BME 680.\n");
-      showLogo_hackteria(); //ERROR
+      Serial.print("        ID of 0x76 represents a BME 680.\n");
+      showError(); //ERROR
       delay(3000);
     } else {
         Serial.println("BMP280 connected successfully");
         OLEDtestSuccess();
         delay(500);
     }
-    
-
-            
-        
-    
+       
     /* Default settings from datasheet. */
-    bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
-                  Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
-                  Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
-                  Adafruit_BMP280::FILTER_X16,      /* Filtering. */
-                  Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
+    bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,       /* Operating Mode. */
+                    Adafruit_BMP280::SAMPLING_X2,       /* Temp. oversampling */
+                    Adafruit_BMP280::SAMPLING_X16,      /* Pressure oversampling */
+                    Adafruit_BMP280::FILTER_X16,        /* Filtering. */
+                    Adafruit_BMP280::STANDBY_MS_500);   /* Standby time. */
     delay(100);
-    Serial.println("BMP280: read once");
     
+    Serial.println("BMP280: read once");
+    while (true) {
     Serial.print("Temperature: ");
     Serial.print(bmp.readTemperature());
     Serial.print(" *C");
@@ -185,8 +190,10 @@ void setup() {
     Serial.print(bmp.readAltitude(SEA_LEVEL_PRESSURE)); /* Adjusted to local forecast! */
     Serial.print(" m");
     Serial.println();
+    
     OLEDshowBMP280(bmp.readPressure(), bmp.readTemperature(), bmp.readAltitude(SEA_LEVEL_PRESSURE));
-    delay(3000);
+    delay(300);
+    }
     Serial.println("==================  end test  ==================");
     Serial.println();
     
@@ -204,7 +211,7 @@ void setup() {
         Serial.print("Error trying to execute stopPeriodicMeasurement(): ");
         errorToString(error, errorMessage, 256);
         Serial.println(errorMessage);
-        showLogo_hackteria(); //ERROR
+        showError(); //ERROR
         delay(3000);
     } else {
         OLEDtestSuccess();
@@ -230,7 +237,7 @@ void setup() {
     scd4x.setSensorAltitude(alt);
     //scd4x.setAmbientPressure(pressureCalibration);
     scd4x.setTemperatureOffset(tempOffset);
-    scd4x.setAutomaticSelfCalibration(false);
+    scd4x.setAutomaticSelfCalibration(ascSetting);
     
     uint16_t ascEnabled;
     error = scd4x.getAutomaticSelfCalibration(ascEnabled);
@@ -349,7 +356,7 @@ void loop() {
  
     if (millis() - getDataTimer >= 5000){
     digitalWrite(LEDonBoard, HIGH);
-    
+    digitalWrite(LEDexternal, HIGH);
     // Read Measurement
 
     error = scd4x.readMeasurement(co2, temperature, humidity);
@@ -371,24 +378,24 @@ void loop() {
         Serial.print("Temp: ");
         Serial.print(temperature);
         Serial.print("\t");
-        Serial.print("Humidity: ");
+        Serial.print("Hum%: ");
         Serial.print(humidity);
 #ifdef BMP_IS_ATTACHED
         Serial.print("\t");
-        Serial.print("BMP-Temp: ");
-        Serial.print(BMP280temp);
-        Serial.print("\t");
-        Serial.print("BMBpressure: ");
+        Serial.print("BMB-Pres: ");
         Serial.print(BMP280pres);
         Serial.print("\t");
-        Serial.print("recalc_to_hPa: ");
-        Serial.print(BMP280preshPa);
+        Serial.print("BMP-Temp: ");
+        Serial.print(BMP280temp);
+        //Serial.print("\t");
+        //Serial.print("recalc_to_hPa: ");
+        //Serial.print(BMP280preshPa);
         Serial.print("\t");
         Serial.print("Alti: ");
         Serial.print(BMP280alti);
-        Serial.print("\t");
-        Serial.print("CalcAlti: ");
-        Serial.print(calcAltitude);
+        //Serial.print("\t");
+        //Serial.print("CalcAlti: ");
+        //Serial.print(calcAltitude);
 #endif
         Serial.println();
         }
@@ -398,6 +405,7 @@ void loop() {
     meas_counter++;
     delay(300);
     digitalWrite(LEDonBoard, LOW);
+    digitalWrite(LEDexternal, LOW);
     }
     
     
@@ -762,6 +770,17 @@ void OLEDtestSuccess(){
   delay(30);
 }
 
+void showError(){
+ 
+  display.setTextSize(2);
+  display.setTextColor(WHITE);
+  display.setCursor(30,32);
+  display.println("ERROR");
+  // Update the display
+  display.display();
+  delay(30);
+}
+
 void OLEDstartMeasurements(){
   display.clearDisplay(); // Make sure the display is cleared
   display.setTextSize(1);
@@ -898,21 +917,21 @@ void OLEDshowSCD41(uint16_t ascEnabled, uint16_t alt, float temp)
     
     display.setCursor(32, 0+22);
     display.println("ASC");
-    display.setCursor(66, 0+22);
+    display.setCursor(70, 0+22);
     display.print(":");
     if (ascEnabled) display.print("ON");
     if (!ascEnabled) display.print("OFF");
 
     display.setCursor(32, 0+35);
     display.println("S.Temp");
-    display.setCursor(66, 0+35);
+    display.setCursor(70, 0+35);
     display.print(":");
     display.print(temp);
     display.println(" *C");
 
     display.setCursor(32, 0+48);
     display.println("S.Alt");    
-    display.setCursor(66, 0+48);
+    display.setCursor(70, 0+48);
     display.print(":");
     display.print(alt);
     display.println(" m");
@@ -924,14 +943,14 @@ void OLEDshowSCD41(uint16_t ascEnabled, uint16_t alt, float temp)
 void OLEDshowBMP280(uint32_t pa, uint16_t temp, float alt)
 {   int tempRound = temp;
     int altRound = alt;
-    //display.fillRect(0, 0, 128, 64, BLACK);
+    display.fillRect(0, 0, 128, 64, BLACK);
     display.drawRect(28, 16, 100, 48, 1); //Border of the bar chart
-    //display.drawBitmap(0, 0, humus_logo_plant, 128, 64, WHITE);
+    display.drawBitmap(0, 0, humus_logo_plant, 128, 64, WHITE);
     
     display.setTextSize(1);
     display.setTextColor(WHITE);
     display.setCursor(4, 0);
-    display.println("BPM");
+    display.println("BMP");
     display.setCursor(4, 9);
     display.println("280");
     
